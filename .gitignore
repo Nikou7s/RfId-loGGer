@@ -1,0 +1,8 @@
+# Python virtual environments
+logger/oasis/
+logger/__pycache__/
+
+# Arduino build artifacts
+build/
+*.bin
+*.elf

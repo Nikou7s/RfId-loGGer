@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  logger:
+    build: 
+      context: ./logger
+      dockerfile: Dockerfile
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    volumes:
+      - ./logger/attendance.csv:/app/attendance.csv
+    # stdin_open and tty allow you to see the live output in the terminal
+    stdin_open: true 
+    tty: true
