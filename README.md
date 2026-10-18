@@ -51,6 +51,7 @@ The system features real-time OLED feedback, live card deduplication against dis
  │  └─────────────────────────┘                                           │
  └────────────────────────────────────────────────────────────────────────┘
 ~~~
+<img width="1983" height="793" alt="ESP32 OLED and RFID Wiring Guide" src="https://github.com/user-attachments/assets/82b99bba-4c3f-4ab5-86b5-5bb807238e11" />
 
 ---
 
