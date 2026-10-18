@@ -1,0 +1,27 @@
+services:
+  logger:
+    build:
+      context: ./logger
+      dockerfile: Dockerfile
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./logger:/app
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+
+  dashboard:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - CSV_PATH=/app/data/attendance.csv
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./logger:/app/data
+    restart: unless-stopped

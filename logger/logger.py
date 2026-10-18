@@ -1,89 +1,84 @@
-import serial
-import time
-import csv
 import os
+import csv
+import serial
+import re
 from datetime import datetime
 
-SERIAL_PORT = '/dev/ttyUSB0'
-BAUD_RATE = 115200
-CSV_FILE = 'attendance.csv'
+PORT = os.environ.get("SERIAL_PORT", "/dev/ttyUSB0")
+BAUD = 115200
+CSV_FILE = "attendance.csv"
 
-# Add ALL your card UIDs and real names here
+# Pre-registered lookup map
 STUDENTS = {
     "7A 4B B7 4F": "Student One",
     "1A 2F B3 4F": "Student Two"
 }
 
-# Keep track of who has been logged today
-daily_logs = {}
-
-def load_existing_logs():
-    """Read the CSV on startup to remember who already scanned today."""
-    if not os.path.exists(CSV_FILE):
-        return
-
-    with open(CSV_FILE, mode='r') as file:
-        reader = csv.reader(file)
-        next(reader, None)  # Skip header
-        for row in reader:
-            if len(row) >= 3:
-                date_str, _, uid = row[0], row[1], row[2]
-                if date_str not in daily_logs:
-                    daily_logs[date_str] = set()
-                daily_logs[date_str].add(uid)
-
-def log_attendance(uid):
-    now = datetime.now()
-    date_str = now.strftime("%Y-%m-%d")
-    time_str = now.strftime("%H:%M:%S")
-    name = STUDENTS.get(uid, "Unknown Card")
-
-    if date_str not in daily_logs:
-        daily_logs[date_str] = set()
-
-    # If they already scanned today, show in console but skip writing to CSV
-    if uid in daily_logs[date_str]:
-        print(f"⚠️ Scan recognized: {name} ({uid}) is already marked present today.")
-        return
-
-    # First time today: write to CSV and save to memory
-    daily_logs[date_str].add(uid)
-
-    with open(CSV_FILE, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([date_str, time_str, uid, name])
-
-    print(f"✅ Added to database: {name} ({uid}) at {time_str}")
-
-def main():
-    # Create file and header if it doesn't exist
-    if not os.path.exists(CSV_FILE):
-        with open(CSV_FILE, mode='w', newline='') as file:
-            writer = csv.writer(file)
+def ensure_csv():
+    if not os.path.exists(CSV_FILE) or os.path.getsize(CSV_FILE) == 0:
+        with open(CSV_FILE, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
             writer.writerow(["Date", "Time", "UID", "Name"])
 
-    load_existing_logs()
+def is_already_marked_today(uid, today_str):
+    ensure_csv()
+    with open(CSV_FILE, mode="r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            row_uid = row.get("UID", "").strip().upper()
+            row_date = row.get("Date", "").strip()
+            if row_uid == uid.upper() and row_date == today_str:
+                return True
+    return False
 
-    print(f"Starting attendance logger on {SERIAL_PORT}...")
+def record_attendance(uid):
+    ensure_csv()
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    time_str = now.strftime("%H:%M:%S")
+    name = STUDENTS.get(uid.upper(), "Unknown Card")
+
+    # Check live disk state instead of frozen RAM cache
+    if is_already_marked_today(uid, today_str):
+        print(f"⚠️ Scan recognized: {name} ({uid}) is already marked present today.", flush=True)
+        return
+
+    with open(CSV_FILE, mode="a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([today_str, time_str, uid.upper(), name])
+        f.flush()
+
+    print(f"✅ Added to database: {name} ({uid}) at {time_str}", flush=True)
+
+def main():
+    ensure_csv()
+    print(f"Starting attendance logger on {PORT}...", flush=True)
+
     try:
-        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-        print("Connected! Waiting for scans. Press Ctrl+C to stop.")
+        ser = serial.Serial(PORT, BAUD, timeout=1)
+        print("Connected! Waiting for scans. Press Ctrl+C to stop.", flush=True)
+    except Exception as e:
+        print(f"❌ Serial connection error: {e}", flush=True)
+        return
 
-        while True:
-            if ser.in_waiting > 0:
-                line = ser.readline().decode('utf-8', errors='replace').strip()
-                if line.startswith("Card UID:"):
-                    uid = line.replace("Card UID:", "").strip()
-                    log_attendance(uid)
-            time.sleep(0.1)
+    uid_pattern = re.compile(r"Card UID:\s*([0-9A-Fa-f ]+)")
 
-    except serial.SerialException as e:
-        print(f"Error connecting: {e}")
-    except KeyboardInterrupt:
-        print("\nLogger stopped.")
-    finally:
-        if 'ser' in locals() and ser.is_open:
-            ser.close()
+    while True:
+        try:
+            line = ser.readline().decode("utf-8", errors="ignore").strip()
+            if not line:
+                continue
 
-if __name__ == '__main__':
+            match = uid_pattern.search(line)
+            if match:
+                uid = match.group(1).strip().upper()
+                record_attendance(uid)
+
+        except KeyboardInterrupt:
+            print("\nShutting down logger.", flush=True)
+            break
+        except Exception as e:
+            print(f"Read error: {e}", flush=True)
+
+if __name__ == "__main__":
     main()

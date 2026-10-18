@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Attendance Grid</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+    <!-- Header & Controls -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-20 shadow-md">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-black tracking-tight text-white flex items-center gap-3">
+                    <span class="w-3.5 h-3.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Attendance Grid View
+                </h1>
+                <p class="text-slate-400 text-xs mt-0.5">
+                    Live syncing enabled • <span id="last-updated">Last updated at {{ now }}</span>
+                </p>
+            </div>
+
+            <!-- Stats & Reset Action -->
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-700 text-xs font-semibold">
+                    <span id="stat-present" class="text-emerald-400">● {{ present_count }} Present</span>
+                    <span class="text-slate-500">|</span>
+                    <span id="stat-absent" class="text-slate-400">○ {{ absent_count }} Absent</span>
+                </div>
+
+                <form method="POST" action="/clear-data" onsubmit="return confirm('Are you sure you want to reset all attendance records?');">
+                    <button type="submit" class="px-3.5 py-2 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-500/30 text-xs font-semibold rounded-xl transition">
+                        🗑️ Reset All Scans
+                    </button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-6 py-8">
+
+        <!-- Date Selector Filter -->
+        <div class="flex items-center justify-between mb-6 bg-slate-800/60 p-3.5 rounded-2xl border border-slate-700/60">
+            <form method="GET" action="/" class="flex items-center gap-3" id="date-filter-form">
+                <label class="text-xs font-bold uppercase tracking-wider text-slate-400">Target Date:</label>
+                <input type="date" id="target-date" name="date" value="{{ selected_date }}" onchange="this.form.submit()"
+                       class="bg-slate-900 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-mono text-white outline-none focus:border-indigo-400 cursor-pointer">
+            </form>
+            {% if selected_date != today %}
+            <a href="/" class="text-xs text-indigo-400 hover:underline">Return to Today</a>
+            {% endif %}
+        </div>
+
+        <!-- Student Grid -->
+        <div class="mb-10">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4">Classroom Roster</h2>
+            
+            <div id="grid-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-5">
+                {% for student in student_boxes %}
+                    {% if student.is_present %}
+                    <!-- PRESENT: Green Box -->
+                    <div class="aspect-square bg-emerald-600 rounded-2xl p-4 flex flex-col justify-between shadow-lg shadow-emerald-950/40 border-2 border-emerald-400 transition">
+                        <div class="flex justify-between items-start">
+                            <span class="w-7 h-7 rounded-full bg-emerald-700/90 flex items-center justify-center text-white font-bold text-sm">
+                                ✓
+                            </span>
+                            <span class="text-[10px] font-mono uppercase bg-emerald-800/80 px-2 py-0.5 rounded-md text-emerald-200">
+                                Present
+                            </span>
+                        </div>
+                        
+                        <div class="text-center my-1">
+                            <div class="text-sm font-extrabold text-white leading-tight uppercase">
+                                {{ student.name }}
+                            </div>
+                            <div class="text-[10px] font-mono text-emerald-200 mt-0.5">
+                                {{ student.uid }}
+                            </div>
+                            <div class="text-[10px] font-mono text-emerald-100 font-semibold mt-1">
+                                🕒 {{ student.checkin_time }}
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-emerald-500/40">
+                            <form method="POST" action="/mark-absent">
+                                <input type="hidden" name="uid" value="{{ student.uid }}">
+                                <input type="hidden" name="date" value="{{ selected_date }}">
+                                <button type="submit" class="w-full py-1 px-2 bg-emerald-800/80 hover:bg-rose-700 hover:text-white text-emerald-100 text-[10px] font-semibold rounded-lg border border-emerald-400/40 hover:border-rose-400 transition">
+                                    Mark Absent
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% else %}
+                    <!-- ABSENT / WAITING: Gray Box -->
+                    <div class="aspect-square bg-slate-800/90 rounded-2xl p-4 flex flex-col justify-between border-2 border-dashed border-slate-700 opacity-70 hover:opacity-100 transition">
+                        <div class="flex justify-between items-start">
+                            <span class="w-7 h-7 rounded-full bg-slate-700/80 flex items-center justify-center text-slate-400 text-xs font-semibold">
+                                ○
+                            </span>
+                            <span class="text-[10px] font-mono uppercase bg-slate-700 px-2 py-0.5 rounded-md text-slate-400">
+                                Absent
+                            </span>
+                        </div>
+
+                        <div class="text-center my-auto">
+                            <div class="text-sm font-bold text-slate-300 leading-tight uppercase">
+                                {{ student.name }}
+                            </div>
+                            <div class="text-[10px] font-mono text-slate-500 mt-0.5">
+                                {{ student.uid }}
+                            </div>
+                        </div>
+
+                        <div class="pt-2 border-t border-slate-700/50">
+                            <form method="POST" action="/mark-present">
+                                <input type="hidden" name="uid" value="{{ student.uid }}">
+                                <input type="hidden" name="name" value="{{ student.name }}">
+                                <input type="hidden" name="date" value="{{ selected_date }}">
+                                <button type="submit" class="w-full py-1 px-2 bg-slate-700 hover:bg-emerald-700 hover:text-white text-slate-300 text-[10px] font-semibold rounded-lg border border-slate-600 hover:border-emerald-500 transition">
+                                    Mark Present
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Seamless Background Poller: Updates tiles without reloading the page -->
+    <script>
+        const selectedDate = document.getElementById('target-date').value;
+
+        async function syncRoster() {
+            try {
+                const res = await fetch(`/api/roster?date=${encodeURIComponent(selectedDate)}`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                document.getElementById('stat-present').textContent = `● ${data.present_count} Present`;
+                document.getElementById('stat-absent').textContent = `○ ${data.absent_count} Absent`;
+                document.getElementById('last-updated').textContent = `Last updated at ${data.now}`;
+
+                const container = document.getElementById('grid-container');
+                container.innerHTML = data.student_boxes.map(s => {
+                    if (s.is_present) {
+                        return `
+                        <div class="aspect-square bg-emerald-600 rounded-2xl p-4 flex flex-col justify-between shadow-lg shadow-emerald-950/40 border-2 border-emerald-400 transition">
+                            <div class="flex justify-between items-start">
+                                <span class="w-7 h-7 rounded-full bg-emerald-700/90 flex items-center justify-center text-white font-bold text-sm">✓</span>
+                                <span class="text-[10px] font-mono uppercase bg-emerald-800/80 px-2 py-0.5 rounded-md text-emerald-200">Present</span>
+                            </div>
+                            <div class="text-center my-1">
+                                <div class="text-sm font-extrabold text-white leading-tight uppercase">${s.name}</div>
+                                <div class="text-[10px] font-mono text-emerald-200 mt-0.5">${s.uid}</div>
+                                <div class="text-[10px] font-mono text-emerald-100 font-semibold mt-1">🕒 ${s.checkin_time}</div>
+                            </div>
+                            <div class="pt-2 border-t border-emerald-500/40">
+                                <form method="POST" action="/mark-absent">
+                                    <input type="hidden" name="uid" value="${s.uid}">
+                                    <input type="hidden" name="date" value="${selectedDate}">
+                                    <button type="submit" class="w-full py-1 px-2 bg-emerald-800/80 hover:bg-rose-700 hover:text-white text-emerald-100 text-[10px] font-semibold rounded-lg border border-emerald-400/40 hover:border-rose-400 transition">
+                                        Mark Absent
+                                    </button>
+                                </form>
+                            </div>
+                        </div>`;
+                    } else {
+                        return `
+                        <div class="aspect-square bg-slate-800/90 rounded-2xl p-4 flex flex-col justify-between border-2 border-dashed border-slate-700 opacity-70 hover:opacity-100 transition">
+                            <div class="flex justify-between items-start">
+                                <span class="w-7 h-7 rounded-full bg-slate-700/80 flex items-center justify-center text-slate-400 text-xs font-semibold">○</span>
+                                <span class="text-[10px] font-mono uppercase bg-slate-700 px-2 py-0.5 rounded-md text-slate-400">Absent</span>
+                            </div>
+                            <div class="text-center my-auto">
+                                <div class="text-sm font-bold text-slate-300 leading-tight uppercase">${s.name}</div>
+                                <div class="text-[10px] font-mono text-slate-500 mt-0.5">${s.uid}</div>
+                            </div>
+                            <div class="pt-2 border-t border-slate-700/50">
+                                <form method="POST" action="/mark-present">
+                                    <input type="hidden" name="uid" value="${s.uid}">
+                                    <input type="hidden" name="name" value="${s.name}">
+                                    <input type="hidden" name="date" value="${selectedDate}">
+                                    <button type="submit" class="w-full py-1 px-2 bg-slate-700 hover:bg-emerald-700 hover:text-white text-slate-300 text-[10px] font-semibold rounded-lg border border-slate-600 hover:border-emerald-500 transition">
+                                        Mark Present
+                                    </button>
+                                </form>
+                            </div>
+                        </div>`;
+                    }
+                }).join('');
+            } catch (err) {
+                console.error("Sync error:", err);
+            }
+        }
+
+        // Poll every 3 seconds seamlessly
+        setInterval(syncRoster, 3000);
+    </script>
+</body>
+</html>
